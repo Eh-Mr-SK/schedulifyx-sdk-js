@@ -332,13 +332,13 @@ export class SchedulifyX {
     /**
      * Helper to upload a file and return the media URL
      */
-    upload: async (file: Blob | Buffer, filename: string, contentType: string): Promise<string> => {
+    upload: async (file: Blob, filename: string, contentType: string): Promise<string> => {
       const { data } = await this.media.getUploadUrl({ filename, contentType });
       
       await fetch(data.uploadUrl, {
         method: 'PUT',
         headers: { 'Content-Type': contentType },
-        body: file,
+        body: file as BodyInit,
       });
 
       return data.mediaUrl;

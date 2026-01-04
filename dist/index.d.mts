@@ -222,7 +222,7 @@ declare class SchedulifyX {
         /**
          * Helper to upload a file and return the media URL
          */
-        upload: (file: Blob | Buffer, filename: string, contentType: string) => Promise<string>;
+        upload: (file: Blob, filename: string, contentType: string) => Promise<string>;
     };
     /**
      * Get API usage statistics
