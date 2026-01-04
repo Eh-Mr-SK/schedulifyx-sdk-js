@@ -15,9 +15,9 @@ pnpm add schedulifyx-sdk
 ## Quick Start
 
 ```typescript
-import { Schedulify } from 'schedulifyx-sdk';
+import { SchedulifyX } from 'schedulifyx-sdk';
 
-const client = new Schedulify('sk_live_YOUR_API_KEY');
+const client = new SchedulifyX('sk_live_YOUR_API_KEY');
 
 // List all posts
 const posts = await client.posts.list();
@@ -37,13 +37,13 @@ await client.posts.publish(post.data.id);
 ## Configuration
 
 ```typescript
-import { Schedulify } from '@schedulify/sdk';
+import { SchedulifyX } from 'schedulifyx-sdk';
 
 // Simple initialization
-const client = new Schedulify('sk_live_YOUR_API_KEY');
+const client = new SchedulifyX('sk_live_YOUR_API_KEY');
 
 // With options
-const client = new Schedulify({
+const client = new SchedulifyX({
   apiKey: 'sk_live_YOUR_API_KEY',
   baseUrl: 'https://api.schedulifyx.com', // optional
   timeout: 30000 // optional, in ms
@@ -209,12 +209,12 @@ await client.tenants.disconnectAccount(tenant.data.id, 'acc_123');
 ## Error Handling
 
 ```typescript
-import { Schedulify, SchedulifyError } from '@schedulify/sdk';
+import { SchedulifyX, SchedulifyXError } from 'schedulifyx-sdk';
 
 try {
   await client.posts.create({...});
 } catch (error) {
-  if (error instanceof SchedulifyError) {
+  if (error instanceof SchedulifyXError) {
     console.error('API Error:', error.code, error.message);
     console.error('Status:', error.status);
     console.error('Details:', error.details);
@@ -233,7 +233,7 @@ import type {
   Analytics, 
   Tenant, 
   QueueSchedule,
-  SchedulifyConfig 
+  SchedulifyXConfig 
 } from 'schedulifyx-sdk';
 ```
 

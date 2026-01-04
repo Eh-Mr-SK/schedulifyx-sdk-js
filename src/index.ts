@@ -4,7 +4,7 @@
  */
 
 // Types
-export interface SchedulifyConfig {
+export interface SchedulifyXConfig {
   apiKey: string;
   baseUrl?: string;
   timeout?: number;
@@ -105,14 +105,14 @@ export interface ApiError {
 }
 
 // Error class
-export class SchedulifyError extends Error {
+export class SchedulifyXError extends Error {
   code: string;
   status: number;
   details?: Record<string, unknown>;
 
   constructor(message: string, code: string, status: number, details?: Record<string, unknown>) {
     super(message);
-    this.name = 'SchedulifyError';
+    this.name = 'SchedulifyXError';
     this.code = code;
     this.status = status;
     this.details = details;
@@ -120,12 +120,12 @@ export class SchedulifyError extends Error {
 }
 
 // Main SDK Class
-export class Schedulify {
+export class SchedulifyX {
   private apiKey: string;
   private baseUrl: string;
   private timeout: number;
 
-  constructor(config: SchedulifyConfig | string) {
+  constructor(config: SchedulifyXConfig | string) {
     if (typeof config === 'string') {
       this.apiKey = config;
       this.baseUrl = 'https://api.schedulifyx.com';
@@ -171,7 +171,7 @@ export class Schedulify {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({})) as { error?: ApiError };
-        throw new SchedulifyError(
+        throw new SchedulifyXError(
           errorData.error?.message || `HTTP ${response.status}`,
           errorData.error?.code || 'http_error',
           response.status,
@@ -182,11 +182,11 @@ export class Schedulify {
       return response.json() as Promise<T>;
     } catch (error) {
       clearTimeout(timeoutId);
-      if (error instanceof SchedulifyError) throw error;
+      if (error instanceof SchedulifyXError) throw error;
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new SchedulifyError('Request timeout', 'timeout', 408);
+        throw new SchedulifyXError('Request timeout', 'timeout', 408);
       }
-      throw new SchedulifyError(
+      throw new SchedulifyXError(
         error instanceof Error ? error.message : 'Network error',
         'network_error',
         0
@@ -494,4 +494,4 @@ export class Schedulify {
 }
 
 // Default export for convenience
-export default Schedulify;
+export default SchedulifyX;

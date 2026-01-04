@@ -1,14 +1,14 @@
 // src/index.ts
-var SchedulifyError = class extends Error {
+var SchedulifyXError = class extends Error {
   constructor(message, code, status, details) {
     super(message);
-    this.name = "SchedulifyError";
+    this.name = "SchedulifyXError";
     this.code = code;
     this.status = status;
     this.details = details;
   }
 };
-var Schedulify = class {
+var SchedulifyX = class {
   constructor(config) {
     // ==================== POSTS ====================
     this.posts = {
@@ -249,7 +249,7 @@ var Schedulify = class {
       clearTimeout(timeoutId);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new SchedulifyError(
+        throw new SchedulifyXError(
           errorData.error?.message || `HTTP ${response.status}`,
           errorData.error?.code || "http_error",
           response.status,
@@ -259,11 +259,11 @@ var Schedulify = class {
       return response.json();
     } catch (error) {
       clearTimeout(timeoutId);
-      if (error instanceof SchedulifyError) throw error;
+      if (error instanceof SchedulifyXError) throw error;
       if (error instanceof Error && error.name === "AbortError") {
-        throw new SchedulifyError("Request timeout", "timeout", 408);
+        throw new SchedulifyXError("Request timeout", "timeout", 408);
       }
-      throw new SchedulifyError(
+      throw new SchedulifyXError(
         error instanceof Error ? error.message : "Network error",
         "network_error",
         0
@@ -271,9 +271,9 @@ var Schedulify = class {
     }
   }
 };
-var index_default = Schedulify;
+var index_default = SchedulifyX;
 export {
-  Schedulify,
-  SchedulifyError,
+  SchedulifyX,
+  SchedulifyXError,
   index_default as default
 };

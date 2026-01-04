@@ -1,8 +1,8 @@
 /**
  * SchedulifyX SDK - Official JavaScript/TypeScript SDK
- * https://schedulifyx.com/docs
+ * https://app.schedulifyx.com/docs/
  */
-interface SchedulifyConfig {
+interface SchedulifyXConfig {
     apiKey: string;
     baseUrl?: string;
     timeout?: number;
@@ -92,17 +92,17 @@ interface ApiError {
     message: string;
     details?: Record<string, unknown>;
 }
-declare class SchedulifyError extends Error {
+declare class SchedulifyXError extends Error {
     code: string;
     status: number;
     details?: Record<string, unknown>;
     constructor(message: string, code: string, status: number, details?: Record<string, unknown>);
 }
-declare class Schedulify {
+declare class SchedulifyX {
     private apiKey;
     private baseUrl;
     private timeout;
-    constructor(config: SchedulifyConfig | string);
+    constructor(config: SchedulifyXConfig | string);
     private request;
     posts: {
         /**
@@ -360,4 +360,4 @@ declare class Schedulify {
     };
 }
 
-export { type Account, type Analytics, type AnalyticsOverview, type ApiError, type MediaUploadResponse, type PaginatedResponse, type Post, type QueueSchedule, type QueueSlot, Schedulify, type SchedulifyConfig, SchedulifyError, type Tenant, type Usage, Schedulify as default };
+export { type Account, type Analytics, type AnalyticsOverview, type ApiError, type MediaUploadResponse, type PaginatedResponse, type Post, type QueueSchedule, type QueueSlot, SchedulifyX, type SchedulifyXConfig, SchedulifyXError, type Tenant, type Usage, SchedulifyX as default };
