@@ -1,0 +1,59 @@
+{
+  "name": "schedulifyx-sdk",
+  "version": "1.0.0",
+  "description": "Official JavaScript/TypeScript SDK for SchedulifyX API - Social media scheduling made easy",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "test": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "schedulify",
+    "schedulifyx",
+    "social-media",
+    "scheduling",
+    "api",
+    "sdk",
+    "instagram",
+    "twitter",
+    "facebook",
+    "linkedin",
+    "tiktok",
+    "threads",
+    "bluesky",
+    "mastodon",
+    "pinterest"
+  ],
+  "author": "SchedulifyX",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Eh-Mr-SK/schedulifyx-sdk-js"
+  },
+  "bugs": {
+    "url": "https://github.com/Eh-Mr-SK/schedulifyx-sdk-js/issues"
+  },
+  "homepage": "https://app.schedulifyx.com/docs/",
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}
