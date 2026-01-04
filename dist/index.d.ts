@@ -68,10 +68,50 @@ interface QueueSlot {
 }
 interface QueueSchedule {
     id: string;
-    profileId: string;
+    accountId: string;
     timezone: string;
     slots: QueueSlot[];
-    active: boolean;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+interface Webhook {
+    id: string;
+    name: string;
+    url: string;
+    secret?: string;
+    events: string[];
+    isActive: boolean;
+    retryCount: number;
+    timeoutSeconds: number;
+    lastTriggeredAt?: string;
+    lastSuccessAt?: string;
+    lastFailureAt?: string;
+    stats: {
+        totalTriggers: number;
+        totalSuccesses: number;
+        totalFailures: number;
+    };
+    createdAt: string;
+    updatedAt: string;
+}
+interface WebhookEvent {
+    id: string;
+    webhookId: string;
+    eventType: string;
+    status: 'pending' | 'delivered' | 'failed';
+    httpStatus?: number;
+    responseBody?: string;
+    errorMessage?: string;
+    attempts: number;
+    deliveredAt?: string;
+    createdAt: string;
+}
+interface WebhookEventType {
+    event: string;
+    category: string;
+    action: string;
+    description: string;
 }
 interface MediaUploadResponse {
     uploadUrl: string;
@@ -232,9 +272,9 @@ declare class SchedulifyX {
     }>;
     queue: {
         /**
-         * Get queue schedule for a profile
+         * Get queue schedule for an account
          */
-        getSlots: (profileId: string) => Promise<{
+        getSlots: (accountId: string) => Promise<{
             data: {
                 exists: boolean;
                 schedule?: QueueSchedule;
@@ -245,25 +285,32 @@ declare class SchedulifyX {
          * Create or update queue schedule
          */
         setSlots: (data: {
-            profileId: string;
+            accountId: string;
             timezone: string;
             slots: QueueSlot[];
-            active?: boolean;
-            reshuffleExisting?: boolean;
+            isActive?: boolean;
         }) => Promise<{
-            data: QueueSchedule;
+            data: {
+                success: boolean;
+                schedule: QueueSchedule;
+                nextSlots: string[];
+            };
         }>;
         /**
          * Delete queue schedule
          */
-        deleteSlots: (profileId: string) => Promise<{
-            success: boolean;
+        deleteSlots: (accountId: string) => Promise<{
+            data: {
+                deleted: boolean;
+                message: string;
+            };
         }>;
         /**
          * Get the next available slot
          */
-        getNextSlot: (profileId: string) => Promise<{
+        getNextSlot: (accountId: string) => Promise<{
             data: {
+                accountId: string;
                 nextSlot: string;
                 timezone: string;
             };
@@ -271,10 +318,107 @@ declare class SchedulifyX {
         /**
          * Preview upcoming slots
          */
-        preview: (profileId: string, count?: number) => Promise<{
+        preview: (accountId: string, count?: number) => Promise<{
             data: {
+                accountId: string;
+                timezone: string;
+                count: number;
                 slots: string[];
             };
+        }>;
+        /**
+         * Get all queue schedules
+         */
+        getAll: () => Promise<{
+            data: QueueSchedule[];
+        }>;
+    };
+    webhooks: {
+        /**
+         * List all webhooks
+         */
+        list: () => Promise<{
+            data: Webhook[];
+        }>;
+        /**
+         * Get a specific webhook
+         */
+        get: (webhookId: string) => Promise<{
+            data: Webhook;
+        }>;
+        /**
+         * Create a new webhook
+         */
+        create: (data: {
+            name: string;
+            url: string;
+            events: string[];
+            isActive?: boolean;
+            retryCount?: number;
+            timeoutSeconds?: number;
+        }) => Promise<{
+            data: Webhook;
+            message: string;
+        }>;
+        /**
+         * Update a webhook
+         */
+        update: (webhookId: string, data: {
+            name?: string;
+            url?: string;
+            events?: string[];
+            isActive?: boolean;
+            retryCount?: number;
+            timeoutSeconds?: number;
+        }) => Promise<{
+            data: Webhook;
+        }>;
+        /**
+         * Delete a webhook
+         */
+        delete: (webhookId: string) => Promise<{
+            data: {
+                deleted: boolean;
+                id: string;
+            };
+        }>;
+        /**
+         * Rotate webhook secret
+         */
+        rotateSecret: (webhookId: string) => Promise<{
+            data: {
+                secret: string;
+                message: string;
+            };
+        }>;
+        /**
+         * Test a webhook by sending a test event
+         */
+        test: (webhookId: string, eventType?: string) => Promise<{
+            data: {
+                success: boolean;
+                eventId: string;
+            };
+        }>;
+        /**
+         * Get webhook event history
+         */
+        getEvents: (webhookId: string, params?: {
+            limit?: number;
+            offset?: number;
+        }) => Promise<{
+            data: WebhookEvent[];
+            pagination: {
+                total: number;
+                limit: number;
+                offset: number;
+            };
+        }>;
+        /**
+         * Get available event types
+         */
+        getEventTypes: () => Promise<{
+            data: WebhookEventType[];
         }>;
     };
     tenants: {
@@ -360,4 +504,4 @@ declare class SchedulifyX {
     };
 }
 
-export { type Account, type Analytics, type AnalyticsOverview, type ApiError, type MediaUploadResponse, type PaginatedResponse, type Post, type QueueSchedule, type QueueSlot, SchedulifyX, type SchedulifyXConfig, SchedulifyXError, type Tenant, type Usage, SchedulifyX as default };
+export { type Account, type Analytics, type AnalyticsOverview, type ApiError, type MediaUploadResponse, type PaginatedResponse, type Post, type QueueSchedule, type QueueSlot, SchedulifyX, type SchedulifyXConfig, SchedulifyXError, type Tenant, type Usage, type Webhook, type WebhookEvent, type WebhookEventType, SchedulifyX as default };

@@ -122,10 +122,10 @@ var SchedulifyX = class {
     // ==================== QUEUE ====================
     this.queue = {
       /**
-       * Get queue schedule for a profile
+       * Get queue schedule for an account
        */
-      getSlots: async (profileId) => {
-        return this.request("GET", "/queue/slots", void 0, { profileId });
+      getSlots: async (accountId) => {
+        return this.request("GET", "/queue/slots", void 0, { accountId });
       },
       /**
        * Create or update queue schedule
@@ -136,20 +136,83 @@ var SchedulifyX = class {
       /**
        * Delete queue schedule
        */
-      deleteSlots: async (profileId) => {
-        return this.request("DELETE", "/queue/slots", void 0, { profileId });
+      deleteSlots: async (accountId) => {
+        return this.request("DELETE", "/queue/slots", void 0, { accountId });
       },
       /**
        * Get the next available slot
        */
-      getNextSlot: async (profileId) => {
-        return this.request("GET", "/queue/next-slot", void 0, { profileId });
+      getNextSlot: async (accountId) => {
+        return this.request("GET", "/queue/next-slot", void 0, { accountId });
       },
       /**
        * Preview upcoming slots
        */
-      preview: async (profileId, count) => {
-        return this.request("GET", "/queue/preview", void 0, { profileId, count });
+      preview: async (accountId, count) => {
+        return this.request("GET", "/queue/preview", void 0, { accountId, count });
+      },
+      /**
+       * Get all queue schedules
+       */
+      getAll: async () => {
+        return this.request("GET", "/queue/all");
+      }
+    };
+    // ==================== WEBHOOKS ====================
+    this.webhooks = {
+      /**
+       * List all webhooks
+       */
+      list: async () => {
+        return this.request("GET", "/webhooks");
+      },
+      /**
+       * Get a specific webhook
+       */
+      get: async (webhookId) => {
+        return this.request("GET", `/webhooks/${webhookId}`);
+      },
+      /**
+       * Create a new webhook
+       */
+      create: async (data) => {
+        return this.request("POST", "/webhooks", data);
+      },
+      /**
+       * Update a webhook
+       */
+      update: async (webhookId, data) => {
+        return this.request("PATCH", `/webhooks/${webhookId}`, data);
+      },
+      /**
+       * Delete a webhook
+       */
+      delete: async (webhookId) => {
+        return this.request("DELETE", `/webhooks/${webhookId}`);
+      },
+      /**
+       * Rotate webhook secret
+       */
+      rotateSecret: async (webhookId) => {
+        return this.request("POST", `/webhooks/${webhookId}/rotate-secret`);
+      },
+      /**
+       * Test a webhook by sending a test event
+       */
+      test: async (webhookId, eventType) => {
+        return this.request("POST", `/webhooks/${webhookId}/test`, { eventType });
+      },
+      /**
+       * Get webhook event history
+       */
+      getEvents: async (webhookId, params) => {
+        return this.request("GET", `/webhooks/${webhookId}/events`, void 0, params);
+      },
+      /**
+       * Get available event types
+       */
+      getEventTypes: async () => {
+        return this.request("GET", "/webhooks/events/types");
       }
     };
     // ==================== TENANTS (Multi-tenant) ====================

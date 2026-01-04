@@ -76,10 +76,54 @@ export interface QueueSlot {
 
 export interface QueueSchedule {
   id: string;
-  profileId: string;
+  accountId: string;
   timezone: string;
   slots: QueueSlot[];
-  active: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Webhook Types
+export interface Webhook {
+  id: string;
+  name: string;
+  url: string;
+  secret?: string;
+  events: string[];
+  isActive: boolean;
+  retryCount: number;
+  timeoutSeconds: number;
+  lastTriggeredAt?: string;
+  lastSuccessAt?: string;
+  lastFailureAt?: string;
+  stats: {
+    totalTriggers: number;
+    totalSuccesses: number;
+    totalFailures: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WebhookEvent {
+  id: string;
+  webhookId: string;
+  eventType: string;
+  status: 'pending' | 'delivered' | 'failed';
+  httpStatus?: number;
+  responseBody?: string;
+  errorMessage?: string;
+  attempts: number;
+  deliveredAt?: string;
+  createdAt: string;
+}
+
+export interface WebhookEventType {
+  event: string;
+  category: string;
+  action: string;
+  description: string;
 }
 
 export interface MediaUploadResponse {
@@ -358,44 +402,134 @@ export class SchedulifyX {
 
   queue = {
     /**
-     * Get queue schedule for a profile
+     * Get queue schedule for an account
      */
-    getSlots: async (profileId: string): Promise<{ data: { exists: boolean; schedule?: QueueSchedule; nextSlots?: string[] } }> => {
-      return this.request('GET', '/queue/slots', undefined, { profileId });
+    getSlots: async (accountId: string): Promise<{ data: { exists: boolean; schedule?: QueueSchedule; nextSlots?: string[] } }> => {
+      return this.request('GET', '/queue/slots', undefined, { accountId });
     },
 
     /**
      * Create or update queue schedule
      */
     setSlots: async (data: {
-      profileId: string;
+      accountId: string;
       timezone: string;
       slots: QueueSlot[];
-      active?: boolean;
-      reshuffleExisting?: boolean;
-    }): Promise<{ data: QueueSchedule }> => {
+      isActive?: boolean;
+    }): Promise<{ data: { success: boolean; schedule: QueueSchedule; nextSlots: string[] } }> => {
       return this.request('PUT', '/queue/slots', data);
     },
 
     /**
      * Delete queue schedule
      */
-    deleteSlots: async (profileId: string): Promise<{ success: boolean }> => {
-      return this.request('DELETE', '/queue/slots', undefined, { profileId });
+    deleteSlots: async (accountId: string): Promise<{ data: { deleted: boolean; message: string } }> => {
+      return this.request('DELETE', '/queue/slots', undefined, { accountId });
     },
 
     /**
      * Get the next available slot
      */
-    getNextSlot: async (profileId: string): Promise<{ data: { nextSlot: string; timezone: string } }> => {
-      return this.request('GET', '/queue/next-slot', undefined, { profileId });
+    getNextSlot: async (accountId: string): Promise<{ data: { accountId: string; nextSlot: string; timezone: string } }> => {
+      return this.request('GET', '/queue/next-slot', undefined, { accountId });
     },
 
     /**
      * Preview upcoming slots
      */
-    preview: async (profileId: string, count?: number): Promise<{ data: { slots: string[] } }> => {
-      return this.request('GET', '/queue/preview', undefined, { profileId, count });
+    preview: async (accountId: string, count?: number): Promise<{ data: { accountId: string; timezone: string; count: number; slots: string[] } }> => {
+      return this.request('GET', '/queue/preview', undefined, { accountId, count });
+    },
+
+    /**
+     * Get all queue schedules
+     */
+    getAll: async (): Promise<{ data: QueueSchedule[] }> => {
+      return this.request('GET', '/queue/all');
+    },
+  };
+
+  // ==================== WEBHOOKS ====================
+
+  webhooks = {
+    /**
+     * List all webhooks
+     */
+    list: async (): Promise<{ data: Webhook[] }> => {
+      return this.request('GET', '/webhooks');
+    },
+
+    /**
+     * Get a specific webhook
+     */
+    get: async (webhookId: string): Promise<{ data: Webhook }> => {
+      return this.request('GET', `/webhooks/${webhookId}`);
+    },
+
+    /**
+     * Create a new webhook
+     */
+    create: async (data: {
+      name: string;
+      url: string;
+      events: string[];
+      isActive?: boolean;
+      retryCount?: number;
+      timeoutSeconds?: number;
+    }): Promise<{ data: Webhook; message: string }> => {
+      return this.request('POST', '/webhooks', data);
+    },
+
+    /**
+     * Update a webhook
+     */
+    update: async (webhookId: string, data: {
+      name?: string;
+      url?: string;
+      events?: string[];
+      isActive?: boolean;
+      retryCount?: number;
+      timeoutSeconds?: number;
+    }): Promise<{ data: Webhook }> => {
+      return this.request('PATCH', `/webhooks/${webhookId}`, data);
+    },
+
+    /**
+     * Delete a webhook
+     */
+    delete: async (webhookId: string): Promise<{ data: { deleted: boolean; id: string } }> => {
+      return this.request('DELETE', `/webhooks/${webhookId}`);
+    },
+
+    /**
+     * Rotate webhook secret
+     */
+    rotateSecret: async (webhookId: string): Promise<{ data: { secret: string; message: string } }> => {
+      return this.request('POST', `/webhooks/${webhookId}/rotate-secret`);
+    },
+
+    /**
+     * Test a webhook by sending a test event
+     */
+    test: async (webhookId: string, eventType?: string): Promise<{ data: { success: boolean; eventId: string } }> => {
+      return this.request('POST', `/webhooks/${webhookId}/test`, { eventType });
+    },
+
+    /**
+     * Get webhook event history
+     */
+    getEvents: async (webhookId: string, params?: {
+      limit?: number;
+      offset?: number;
+    }): Promise<{ data: WebhookEvent[]; pagination: { total: number; limit: number; offset: number } }> => {
+      return this.request('GET', `/webhooks/${webhookId}/events`, undefined, params);
+    },
+
+    /**
+     * Get available event types
+     */
+    getEventTypes: async (): Promise<{ data: WebhookEventType[] }> => {
+      return this.request('GET', '/webhooks/events/types');
     },
   };
 
