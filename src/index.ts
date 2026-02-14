@@ -132,6 +132,110 @@ export interface MediaUploadResponse {
   expiresIn: number;
 }
 
+export interface Comment {
+  id: string;
+  platformCommentId: string;
+  platform: string;
+  message: string;
+  authorName: string;
+  authorUsername?: string;
+  authorProfilePicture?: string;
+  likeCount: number;
+  replyCount: number;
+  sentiment?: 'positive' | 'negative' | 'neutral';
+  moderationStatus?: string;
+  isHidden: boolean;
+  postId?: string;
+  parentCommentId?: string;
+  platformCreatedAt?: string;
+  createdAt: string;
+}
+
+export interface CommentStats {
+  total: number;
+  bySentiment: {
+    positive: number;
+    negative: number;
+    neutral: number;
+  };
+  hidden: number;
+  replied: number;
+}
+
+export interface Conversation {
+  id: string;
+  platform: string;
+  participantName: string;
+  participantUsername?: string;
+  participantAvatar?: string;
+  socialAccountId: string;
+  status: 'open' | 'closed' | 'archived';
+  unreadCount: number;
+  lastMessageAt?: string;
+  createdAt: string;
+}
+
+export interface InboxMessage {
+  id: string;
+  direction: 'inbound' | 'outbound';
+  message: string;
+  senderName?: string;
+  senderUsername?: string;
+  platformMessageId?: string;
+  platformCreatedAt?: string;
+  createdAt: string;
+}
+
+export interface InboxStats {
+  conversations: {
+    total: number;
+    open: number;
+    unread: number;
+  };
+  messages: {
+    total: number;
+    inbound: number;
+    outbound: number;
+    responseRate: number;
+  };
+}
+
+export interface HashtagSetItem {
+  id: string;
+  tag: string;
+  type: 'niche' | 'trending' | 'general';
+  competitionLevel?: string;
+  estimatedReach?: number;
+  relevanceScore?: number;
+}
+
+export interface HashtagSet {
+  id: string;
+  name: string;
+  description?: string;
+  platform?: string;
+  category?: string;
+  isFavorite: boolean;
+  usageCount: number;
+  hashtagCount: number;
+  hashtags?: HashtagSetItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Template {
+  id: string;
+  name: string;
+  description?: string;
+  content: string;
+  category?: string;
+  platform?: string;
+  tags?: string[];
+  useCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   pagination: {
@@ -396,6 +500,202 @@ export class SchedulifyX {
    */
   usage = async (): Promise<{ data: Usage }> => {
     return this.request('GET', '/usage');
+  };
+
+  // ==================== COMMENTS ====================
+
+  comments = {
+    /**
+     * List comments across all accounts
+     */
+    list: async (params?: {
+      accountId?: string;
+      platform?: string;
+      sentiment?: 'positive' | 'negative' | 'neutral';
+      sortBy?: 'newest' | 'oldest' | 'likes';
+      limit?: number;
+      offset?: number;
+    }): Promise<PaginatedResponse<Comment>> => {
+      return this.request('GET', '/comments', undefined, params);
+    },
+
+    /**
+     * Get a single comment by ID
+     */
+    get: async (commentId: string): Promise<{ data: Comment }> => {
+      return this.request('GET', `/comments/${commentId}`);
+    },
+
+    /**
+     * Get replies to a comment
+     */
+    getReplies: async (commentId: string): Promise<{ data: Comment[] }> => {
+      return this.request('GET', `/comments/${commentId}/replies`);
+    },
+
+    /**
+     * Reply to a comment
+     */
+    reply: async (commentId: string, data: {
+      message: string;
+    }): Promise<{ data: { id: string; commentId: string; message: string; status: string; createdAt: string } }> => {
+      return this.request('POST', `/comments/${commentId}/reply`, data);
+    },
+
+    /**
+     * Get comment statistics overview
+     */
+    stats: async (): Promise<{ data: CommentStats }> => {
+      return this.request('GET', '/comments/stats/overview');
+    },
+  };
+
+  // ==================== INBOX ====================
+
+  inbox = {
+    /**
+     * List conversations
+     */
+    list: async (params?: {
+      platform?: string;
+      status?: 'open' | 'closed' | 'archived';
+      hasUnread?: boolean;
+      limit?: number;
+      offset?: number;
+    }): Promise<PaginatedResponse<Conversation>> => {
+      return this.request('GET', '/inbox/conversations', undefined, params);
+    },
+
+    /**
+     * Get a specific conversation
+     */
+    get: async (conversationId: string): Promise<{ data: Conversation }> => {
+      return this.request('GET', `/inbox/conversations/${conversationId}`);
+    },
+
+    /**
+     * Get messages in a conversation
+     */
+    getMessages: async (conversationId: string, params?: {
+      limit?: number;
+      offset?: number;
+    }): Promise<PaginatedResponse<InboxMessage>> => {
+      return this.request('GET', `/inbox/conversations/${conversationId}/messages`, undefined, params);
+    },
+
+    /**
+     * Send a reply in a conversation
+     */
+    reply: async (conversationId: string, data: {
+      message: string;
+    }): Promise<{ data: { id: string; conversationId: string; message: string; direction: string; createdAt: string } }> => {
+      return this.request('POST', `/inbox/conversations/${conversationId}/reply`, data);
+    },
+
+    /**
+     * Get inbox statistics
+     */
+    stats: async (): Promise<{ data: InboxStats }> => {
+      return this.request('GET', '/inbox/stats');
+    },
+  };
+
+  // ==================== HASHTAGS ====================
+
+  hashtags = {
+    /**
+     * List hashtag sets
+     */
+    list: async (params?: {
+      platform?: string;
+      category?: string;
+      search?: string;
+      limit?: number;
+      offset?: number;
+    }): Promise<PaginatedResponse<HashtagSet>> => {
+      return this.request('GET', '/hashtags/sets', undefined, params);
+    },
+
+    /**
+     * Get a specific hashtag set
+     */
+    get: async (setId: string): Promise<{ data: HashtagSet }> => {
+      return this.request('GET', `/hashtags/sets/${setId}`);
+    },
+
+    /**
+     * Generate hashtags using AI
+     */
+    generate: async (data: {
+      content?: string;
+      platform?: string;
+      category?: string;
+      tone?: string;
+      count?: number;
+    }): Promise<{ data: { hashtags: { tag: string; type: string; relevanceScore: number }[]; platform: string | null; count: number } }> => {
+      return this.request('POST', '/hashtags/generate', data);
+    },
+  };
+
+  // ==================== TEMPLATES ====================
+
+  templates = {
+    /**
+     * List post templates
+     */
+    list: async (params?: {
+      category?: string;
+      platform?: string;
+      search?: string;
+      limit?: number;
+      offset?: number;
+    }): Promise<PaginatedResponse<Template>> => {
+      return this.request('GET', '/templates', undefined, params);
+    },
+
+    /**
+     * Get a specific template
+     */
+    get: async (templateId: string): Promise<{ data: Template }> => {
+      return this.request('GET', `/templates/${templateId}`);
+    },
+  };
+
+  // ==================== X/TWITTER ====================
+
+  xTwitter = {
+    /**
+     * Get X/Twitter BYOK configuration and account modes
+     */
+    getConfig: async (): Promise<{ data: {
+      hasByokCredentials: boolean;
+      accounts: { id: string; accountName: string; accountUsername: string; mode: string }[];
+      info: { description: string; modes: { byok: string; wallet: string }; setupUrl: string };
+    } }> => {
+      return this.request('GET', '/x/config');
+    },
+
+    /**
+     * Set X/Twitter BYOK API credentials
+     */
+    setCredentials: async (data: {
+      apiKey: string;
+      apiSecret: string;
+      accessToken: string;
+      accessTokenSecret: string;
+    }): Promise<{ data: { saved: boolean; isVerified: boolean; message: string } }> => {
+      return this.request('POST', '/x/credentials', data);
+    },
+
+    /**
+     * Switch X/Twitter mode for an account (byok or wallet)
+     */
+    switchMode: async (data: {
+      accountId: string;
+      mode: 'byok' | 'wallet';
+    }): Promise<{ data: { accountId: string; mode: string; updated: boolean } }> => {
+      return this.request('POST', '/x/mode', data);
+    },
   };
 
   // ==================== QUEUE ====================
