@@ -13,24 +13,28 @@ export interface SchedulifyXConfig {
 export interface Post {
   id: string;
   content: string;
-  mediaUrls?: string[];
   status: 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed';
-  publishAt?: string;
-  publishNow?: boolean;
-  accountIds: string[];
-  platformOverrides?: Record<string, { content?: string }>;
+  scheduledFor: string | null;
+  publishedAt: string | null;
+  source: string | null;
+  postType: string;
+  isDraft: boolean;
+  isThread: boolean;
+  tenantUserId: string | null;
+  platforms: { platform: string; accountId: string; status: string; platformPostId?: string; error?: string }[];
   createdAt: string;
-  updatedAt: string;
+  updatedAt: string | null;
 }
 
 export interface Account {
   id: string;
   platform: string;
-  platformAccountId: string;
-  name: string;
-  username?: string;
-  profilePicture?: string;
+  accountName: string;
+  accountUsername: string;
+  avatarUrl: string | null;
   isActive: boolean;
+  followersCount: number;
+  tenantUserId: string | null;
   createdAt: string;
 }
 
@@ -67,6 +71,17 @@ export interface Tenant {
   name?: string;
   metadata?: Record<string, unknown>;
   createdAt: string;
+}
+
+export interface Profile {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string | null;
+  isDefault: boolean;
+  subscriptionPlan: string | null;
+  createdAt: string;
+  updatedAt: string | null;
 }
 
 export interface QueueSlot {
@@ -124,12 +139,6 @@ export interface WebhookEventType {
   category: string;
   action: string;
   description: string;
-}
-
-export interface MediaUploadResponse {
-  uploadUrl: string;
-  mediaUrl: string;
-  expiresIn: number;
 }
 
 export interface Comment {
@@ -200,40 +209,29 @@ export interface InboxStats {
   };
 }
 
-export interface HashtagSetItem {
+export interface Mention {
   id: string;
-  tag: string;
-  type: 'niche' | 'trending' | 'general';
-  competitionLevel?: string;
-  estimatedReach?: number;
-  relevanceScore?: number;
+  platform: string;
+  mentionType: string;
+  authorUsername: string;
+  authorName?: string;
+  authorProfileUrl?: string;
+  content?: string;
+  mediaUrl?: string;
+  mediaType?: string;
+  permalink?: string;
+  likeCount: number;
+  commentCount: number;
+  status: string;
+  isUgcSaved: boolean;
+  createdAt: string;
 }
 
-export interface HashtagSet {
-  id: string;
-  name: string;
-  description?: string;
-  platform?: string;
-  category?: string;
-  isFavorite: boolean;
-  usageCount: number;
-  hashtagCount: number;
-  hashtags?: HashtagSetItem[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface Template {
-  id: string;
-  name: string;
-  description?: string;
-  content: string;
-  category?: string;
-  platform?: string;
-  tags?: string[];
-  useCount: number;
-  createdAt: string;
-  updatedAt: string;
+export interface MentionStats {
+  total: number;
+  unread: number;
+  responded: number;
+  ugcSaved: number;
 }
 
 export interface PaginatedResponse<T> {
@@ -242,7 +240,6 @@ export interface PaginatedResponse<T> {
     total: number;
     limit: number;
     offset: number;
-    hasMore: boolean;
   };
 }
 
@@ -292,7 +289,7 @@ export class SchedulifyX {
     queryParams?: Record<string, string | number | boolean | undefined>
   ): Promise<T> {
     const url = new URL(`${this.baseUrl}${endpoint}`);
-    
+
     if (queryParams) {
       Object.entries(queryParams).forEach(([key, value]) => {
         if (value !== undefined) {
@@ -351,6 +348,8 @@ export class SchedulifyX {
     list: async (params?: {
       status?: 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed';
       accountId?: string;
+      platform?: string;
+      tenantUserId?: string;
       limit?: number;
       offset?: number;
     }): Promise<PaginatedResponse<Post>> => {
@@ -369,11 +368,11 @@ export class SchedulifyX {
      */
     create: async (data: {
       content: string;
-      accountIds: string[];
-      publishAt?: string;
-      publishNow?: boolean;
+      platforms: { platform: string; accountId: string }[];
+      scheduledFor?: string;
+      mode?: 'publish' | 'schedule' | 'draft';
       mediaUrls?: string[];
-      platformOverrides?: Record<string, { content?: string }>;
+      tenantUserId?: string;
     }): Promise<{ data: Post }> => {
       return this.request('POST', '/posts', data);
     },
@@ -383,8 +382,8 @@ export class SchedulifyX {
      */
     update: async (postId: string, data: {
       content?: string;
-      publishAt?: string;
-      mediaUrls?: string[];
+      scheduledFor?: string;
+      status?: 'draft' | 'scheduled';
     }): Promise<{ data: Post }> => {
       return this.request('PATCH', `/posts/${postId}`, data);
     },
@@ -412,6 +411,8 @@ export class SchedulifyX {
      */
     list: async (params?: {
       platform?: string;
+      active?: boolean;
+      tenantUserId?: string;
       limit?: number;
       offset?: number;
     }): Promise<PaginatedResponse<Account>> => {
@@ -464,35 +465,6 @@ export class SchedulifyX {
     },
   };
 
-  // ==================== MEDIA ====================
-
-  media = {
-    /**
-     * Get a presigned URL for uploading media
-     */
-    getUploadUrl: async (data: {
-      filename: string;
-      contentType: string;
-    }): Promise<{ data: MediaUploadResponse }> => {
-      return this.request('POST', '/media/upload-url', data);
-    },
-
-    /**
-     * Helper to upload a file and return the media URL
-     */
-    upload: async (file: Blob, filename: string, contentType: string): Promise<string> => {
-      const { data } = await this.media.getUploadUrl({ filename, contentType });
-      
-      await fetch(data.uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': contentType },
-        body: file as BodyInit,
-      });
-
-      return data.mediaUrl;
-    },
-  };
-
   // ==================== USAGE ====================
 
   /**
@@ -511,8 +483,10 @@ export class SchedulifyX {
     list: async (params?: {
       accountId?: string;
       platform?: string;
+      postId?: string;
+      status?: string;
       sentiment?: 'positive' | 'negative' | 'neutral';
-      sortBy?: 'newest' | 'oldest' | 'likes';
+      sortBy?: 'newest' | 'oldest' | 'engagement';
       limit?: number;
       offset?: number;
     }): Promise<PaginatedResponse<Comment>> => {
@@ -560,6 +534,7 @@ export class SchedulifyX {
       platform?: string;
       status?: 'open' | 'closed' | 'archived';
       hasUnread?: boolean;
+      accountId?: string;
       limit?: number;
       offset?: number;
     }): Promise<PaginatedResponse<Conversation>> => {
@@ -600,64 +575,27 @@ export class SchedulifyX {
     },
   };
 
-  // ==================== HASHTAGS ====================
+  // ==================== MENTIONS ====================
 
-  hashtags = {
+  mentions = {
     /**
-     * List hashtag sets
+     * List mentions across platforms
      */
     list: async (params?: {
       platform?: string;
-      category?: string;
-      search?: string;
+      status?: string;
+      mentionType?: string;
       limit?: number;
       offset?: number;
-    }): Promise<PaginatedResponse<HashtagSet>> => {
-      return this.request('GET', '/hashtags/sets', undefined, params);
+    }): Promise<PaginatedResponse<Mention>> => {
+      return this.request('GET', '/mentions', undefined, params);
     },
 
     /**
-     * Get a specific hashtag set
+     * Get mention statistics
      */
-    get: async (setId: string): Promise<{ data: HashtagSet }> => {
-      return this.request('GET', `/hashtags/sets/${setId}`);
-    },
-
-    /**
-     * Generate hashtags using AI
-     */
-    generate: async (data: {
-      content?: string;
-      platform?: string;
-      category?: string;
-      tone?: string;
-      count?: number;
-    }): Promise<{ data: { hashtags: { tag: string; type: string; relevanceScore: number }[]; platform: string | null; count: number } }> => {
-      return this.request('POST', '/hashtags/generate', data);
-    },
-  };
-
-  // ==================== TEMPLATES ====================
-
-  templates = {
-    /**
-     * List post templates
-     */
-    list: async (params?: {
-      category?: string;
-      platform?: string;
-      search?: string;
-      limit?: number;
-      offset?: number;
-    }): Promise<PaginatedResponse<Template>> => {
-      return this.request('GET', '/templates', undefined, params);
-    },
-
-    /**
-     * Get a specific template
-     */
-    get: async (templateId: string): Promise<{ data: Template }> => {
-      return this.request('GET', `/templates/${templateId}`);
+    stats: async (): Promise<{ data: MentionStats }> => {
+      return this.request('GET', '/mentions/stats');
     },
   };
 
@@ -667,11 +605,13 @@ export class SchedulifyX {
     /**
      * Get X/Twitter BYOK configuration and account modes
      */
-    getConfig: async (): Promise<{ data: {
-      hasByokCredentials: boolean;
-      accounts: { id: string; accountName: string; accountUsername: string; mode: string }[];
-      info: { description: string; modes: { byok: string; wallet: string }; setupUrl: string };
-    } }> => {
+    getConfig: async (): Promise<{
+      data: {
+        hasByokCredentials: boolean;
+        accounts: { id: string; accountName: string; accountUsername: string; mode: string }[];
+        info: { description: string; modes: { byok: string; wallet: string }; setupUrl: string };
+      }
+    }> => {
       return this.request('GET', '/x/config');
     },
 
@@ -695,6 +635,53 @@ export class SchedulifyX {
       mode: 'byok' | 'wallet';
     }): Promise<{ data: { accountId: string; mode: string; updated: boolean } }> => {
       return this.request('POST', '/x/mode', data);
+    },
+  };
+
+  // ==================== PROFILES ====================
+
+  profiles = {
+    /**
+     * List all publishing profiles
+     */
+    list: async (): Promise<{ data: Profile[] }> => {
+      return this.request('GET', '/profiles');
+    },
+
+    /**
+     * Get a single profile by ID
+     */
+    get: async (profileId: string): Promise<{ data: Profile }> => {
+      return this.request('GET', `/profiles/${profileId}`);
+    },
+
+    /**
+     * Create a new publishing profile
+     */
+    create: async (data: {
+      name: string;
+      description?: string;
+      color?: string;
+    }): Promise<{ data: Profile }> => {
+      return this.request('POST', '/profiles', data);
+    },
+
+    /**
+     * Update an existing profile
+     */
+    update: async (profileId: string, data: {
+      name?: string;
+      description?: string;
+      color?: string;
+    }): Promise<{ data: Profile }> => {
+      return this.request('PUT', `/profiles/${profileId}`, data);
+    },
+
+    /**
+     * Delete a profile
+     */
+    delete: async (profileId: string): Promise<{ success: boolean }> => {
+      return this.request('DELETE', `/profiles/${profileId}`);
     },
   };
 
@@ -873,6 +860,7 @@ export class SchedulifyX {
       email?: string;
       name?: string;
       metadata?: Record<string, unknown>;
+      isActive?: boolean;
     }): Promise<{ data: Tenant }> => {
       return this.request('PATCH', `/tenants/${tenantId}`, data);
     },
@@ -887,8 +875,10 @@ export class SchedulifyX {
     /**
      * Get OAuth URL for tenant to connect a platform
      */
-    getConnectUrl: async (tenantId: string, platform: string): Promise<{ data: { url: string } }> => {
-      return this.request('GET', `/tenants/${tenantId}/connect/${platform}`);
+    getConnectUrl: async (tenantId: string, platform: string, params?: {
+      redirectUri?: string;
+    }): Promise<{ data: { url: string } }> => {
+      return this.request('GET', `/tenants/${tenantId}/connect/${platform}`, undefined, params);
     },
 
     /**
@@ -919,7 +909,7 @@ export class SchedulifyX {
      * Connect Mastodon account for tenant
      */
     connectMastodon: async (tenantId: string, data: {
-      instance: string;
+      instanceUrl: string;
       accessToken: string;
     }): Promise<{ data: Account }> => {
       return this.request('POST', `/tenants/${tenantId}/connect/mastodon`, data);
