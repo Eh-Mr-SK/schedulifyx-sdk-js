@@ -1,7 +1,7 @@
 {
   "name": "schedulifyx-sdk",
-  "version": "1.2.0",
-  "description": "Official JavaScript/TypeScript SDK for SchedulifyX API - Social media scheduling made easy",
+  "version": "3.0.0",
+  "description": "Official JavaScript/TypeScript SDK for SchedulifyX API - Three-tier architecture: Embed, Publishing, and Full Engagement",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -36,7 +36,9 @@
     "threads",
     "bluesky",
     "mastodon",
-    "pinterest"
+    "pinterest",
+    "reddit",
+    "youtube"
   ],
   "author": "SchedulifyX",
   "license": "MIT",

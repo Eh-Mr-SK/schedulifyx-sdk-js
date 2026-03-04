@@ -1,6 +1,19 @@
 # schedulifyx-sdk
 
-Official JavaScript/TypeScript SDK for [SchedulifyX API](https://app.schedulifyx.com/docs/) - Social media scheduling made easy.
+Official JavaScript/TypeScript SDK for [SchedulifyX API](https://app.schedulifyx.com/docs/) — Three-tier API access for social media integration.
+
+## Architecture
+
+SchedulifyX uses a **Three-Tier API Access Model**:
+
+| Tier | Access | Cost |
+|------|--------|------|
+| **Tier 1 — Embed** (default) | Tenants, webhooks, pre-built UI components | Free |
+| **Tier 2 — Publishing API** | Posts, accounts, analytics, queue, profiles | Free (approval required) |
+| **Tier 3 — Full Engagement** | Inbox, comments, mentions + all Tier 2 | $49/year |
+
+- **This SDK** (server-side): Manage tenants, generate client tokens, configure webhooks (all tiers). With Tier 2+ keys, also access posts, accounts, analytics, and more via REST.
+- **Embed SDK** (`@schedulifyx/embed`, client-side): Render pre-built UI components — available on all tiers, no approval needed.
 
 ## Installation
 
@@ -19,19 +32,20 @@ import { SchedulifyX } from 'schedulifyx-sdk';
 
 const client = new SchedulifyX('sk_live_YOUR_API_KEY');
 
-// List all posts
-const posts = await client.posts.list();
-console.log(posts.data);
-
-// Create a scheduled post
-const post = await client.posts.create({
-  content: 'Hello from the SDK! 🚀',
-  platforms: [{ platform: 'twitter', accountId: 'acc_123' }],
-  scheduledFor: '2024-12-20T10:00:00Z'
+// 1. Create a tenant (maps to a user in your app)
+const tenant = await client.tenants.create({
+  externalId: 'user_123',
+  email: 'user@example.com',
+  name: 'John Doe'
 });
 
-// Publish immediately
-await client.posts.publish(post.data.id);
+// 2. Generate a client token for embedding UI components
+const { data: tokenData } = await client.tenants.generateClientToken(tenant.data.id, {
+  components: ['post-creator', 'accounts', 'analytics'],
+  expiresIn: 3600
+});
+
+// 3. Send tokenData.token to your frontend for the Embed SDK
 ```
 
 ## Configuration
@@ -52,127 +66,76 @@ const client = new SchedulifyX({
 
 ## API Reference
 
-### Posts
+### Tenants
+
+Tenants represent users in your application. Each tenant can connect social accounts and use embedded components.
 
 ```typescript
-// List posts with filters
-const posts = await client.posts.list({
-  status: 'scheduled',
-  accountId: 'acc_123',
-  limit: 20,
-  offset: 0
+// Create a tenant
+const tenant = await client.tenants.create({
+  externalId: 'user_123',
+  email: 'user@example.com',
+  name: 'John Doe',
+  metadata: { plan: 'pro' }
 });
 
-// Get single post
-const post = await client.posts.get('post_123');
+// List tenants
+const tenants = await client.tenants.list({ limit: 20, search: 'john' });
 
-// Create post
-const newPost = await client.posts.create({
-  content: 'Hello world!',
-  platforms: [
-    { platform: 'twitter', accountId: 'acc_123' },
-    { platform: 'instagram', accountId: 'acc_456' }
-  ],
-  scheduledFor: '2024-12-20T10:00:00Z',
-  mediaUrls: ['https://example.com/image.jpg']
-});
+// Get single tenant
+const t = await client.tenants.get('tenant_uuid');
 
-// Update post
-await client.posts.update('post_123', {
-  content: 'Updated content',
-  scheduledFor: '2024-12-21T10:00:00Z'
-});
+// Update tenant
+await client.tenants.update('tenant_uuid', { name: 'Jane Doe' });
 
-// Delete post
-await client.posts.delete('post_123');
-
-// Publish immediately
-await client.posts.publish('post_123');
+// Delete tenant (removes all their data)
+await client.tenants.delete('tenant_uuid');
 ```
 
-### Accounts
+### Social Account Connection
+
+Accounts are connected permanently via OAuth — they survive client token expiry.
 
 ```typescript
-// List all connected accounts
-const accounts = await client.accounts.list();
+// Get OAuth URL for tenant to connect a platform
+const { data } = await client.tenants.getConnectUrl('tenant_uuid', 'instagram', {
+  redirectUri: 'https://yourapp.com/callback'
+});
+// Redirect user's browser to data.url
 
-// Filter by platform
-const instagramAccounts = await client.accounts.list({
-  platform: 'instagram'
+// List tenant's connected accounts
+const accounts = await client.tenants.listAccounts('tenant_uuid');
+
+// Disconnect an account
+await client.tenants.disconnectAccount('tenant_uuid', 'account_uuid');
+
+// Connect Bluesky (no OAuth, uses app password)
+await client.tenants.connectBluesky('tenant_uuid', {
+  identifier: 'user.bsky.social',
+  appPassword: 'xxxx-xxxx-xxxx-xxxx'
 });
 
-// Get single account
-const account = await client.accounts.get('acc_123');
-
-// Get Pinterest boards
-const boards = await client.accounts.getPinterestBoards('acc_pinterest_123');
-```
-
-### Profiles
-
-```typescript
-// List publishing profiles
-const profiles = await client.profiles.list();
-
-// Create a profile
-const profile = await client.profiles.create({
-  name: 'Morning Posts',
-  description: 'Profile for morning content',
-  color: '#3B82F6'
-});
-
-// Update a profile
-await client.profiles.update('profile_123', { name: 'Updated Name' });
-
-// Delete a profile
-await client.profiles.delete('profile_123');
-```
-
-### Analytics
-
-```typescript
-// Get overview
-const overview = await client.analytics.overview();
-
-// Get account-specific analytics
-const accountAnalytics = await client.analytics.forAccount('acc_123', { days: 30 });
-
-// Get all analytics
-const allAnalytics = await client.analytics.list({
-  startDate: '2024-01-01',
-  endDate: '2024-12-31'
+// Connect Mastodon (token-based)
+await client.tenants.connectMastodon('tenant_uuid', {
+  instanceUrl: 'https://mastodon.social',
+  accessToken: 'token_here'
 });
 ```
 
-### Queue
+### Client Tokens
+
+Generate short-lived tokens for your frontend to render embedded UI components.
 
 ```typescript
-// Get queue schedule
-const queue = await client.queue.getSlots('acc_123');
-
-// Set queue schedule
-await client.queue.setSlots({
-  accountId: 'acc_123',
-  timezone: 'America/New_York',
-  slots: [
-    { dayOfWeek: 1, time: '09:00' },
-    { dayOfWeek: 1, time: '15:00' },
-    { dayOfWeek: 3, time: '12:00' }
-  ],
-  isActive: true
+// Generate client token (max 1 hour TTL)
+const { data } = await client.tenants.generateClientToken('tenant_uuid', {
+  components: ['post-creator', 'accounts', 'inbox', 'analytics'],
+  expiresIn: 3600,
+  allowedOrigins: ['https://yourapp.com']
 });
 
-// Get next available slot
-const nextSlot = await client.queue.getNextSlot('acc_123');
-
-// Preview upcoming slots
-const preview = await client.queue.preview('acc_123', 10);
-
-// Get all queue schedules
-const all = await client.queue.getAll();
-
-// Delete queue schedule
-await client.queue.deleteSlots('acc_123');
+console.log(data.token);      // Pass to frontend Embed SDK
+console.log(data.expiresAt);  // ISO timestamp
 ```
 
 ### Webhooks
@@ -182,7 +145,7 @@ await client.queue.deleteSlots('acc_123');
 const webhook = await client.webhooks.create({
   name: 'My Webhook',
   url: 'https://your-server.com/webhooks',
-  events: ['post.published', 'post.failed']
+  events: ['post.published', 'post.failed', 'account.connected']
 });
 
 // List webhooks
@@ -207,73 +170,12 @@ const types = await client.webhooks.getEventTypes();
 await client.webhooks.delete('wh_123');
 ```
 
-### Comments
-
-```typescript
-const comments = await client.comments.list({ sentiment: 'positive', limit: 20 });
-const comment = await client.comments.get('comment_123');
-const replies = await client.comments.getReplies('comment_123');
-await client.comments.reply('comment_123', { message: 'Thanks!' });
-const stats = await client.comments.stats();
-```
-
-### Inbox
-
-```typescript
-const conversations = await client.inbox.list({ status: 'open', hasUnread: true });
-const messages = await client.inbox.getMessages('conv_123');
-await client.inbox.reply('conv_123', { message: 'Thanks for reaching out!' });
-const inboxStats = await client.inbox.stats();
-```
-
-### Mentions
-
-```typescript
-const mentions = await client.mentions.list({ platform: 'instagram', status: 'unread' });
-const mentionStats = await client.mentions.stats();
-```
-
-### X/Twitter BYOK
-
-```typescript
-const config = await client.xTwitter.getConfig();
-await client.xTwitter.setCredentials({
-  apiKey: '...', apiSecret: '...', accessToken: '...', accessTokenSecret: '...'
-});
-await client.xTwitter.switchMode({ accountId: 'acc_123', mode: 'byok' });
-```
-
 ### Usage
 
 ```typescript
 const usage = await client.usage();
-console.log(`${usage.data.requestsToday}/${usage.data.dailyLimit} daily requests used`);
-```
-
-### Multi-Tenant
-
-```typescript
-// Create a tenant
-const tenant = await client.tenants.create({
-  externalId: 'user_123',
-  email: 'user@example.com',
-  name: 'John Doe'
-});
-
-// Get OAuth URL for tenant
-const { data } = await client.tenants.getConnectUrl(tenant.data.id, 'instagram');
-
-// List tenant's accounts
-const accounts = await client.tenants.listAccounts(tenant.data.id);
-
-// Connect Bluesky for tenant
-await client.tenants.connectBluesky(tenant.data.id, {
-  identifier: 'user.bsky.social',
-  appPassword: 'xxxx-xxxx-xxxx-xxxx'
-});
-
-// Disconnect account
-await client.tenants.disconnectAccount(tenant.data.id, 'acc_123');
+console.log(`${usage.data.monthlyRequests}/${usage.data.monthlyLimit} monthly requests used`);
+console.log(`${usage.data.monthlyRemaining} remaining this month`);
 ```
 
 ## Error Handling
@@ -282,7 +184,7 @@ await client.tenants.disconnectAccount(tenant.data.id, 'acc_123');
 import { SchedulifyX, SchedulifyXError } from 'schedulifyx-sdk';
 
 try {
-  await client.posts.create({...});
+  await client.tenants.create({ externalId: 'user_123' });
 } catch (error) {
   if (error instanceof SchedulifyXError) {
     console.error('API Error:', error.code, error.message);
@@ -298,29 +200,40 @@ Full TypeScript support with exported types:
 
 ```typescript
 import type {
-  Post,
-  Account,
-  Profile,
-  Analytics,
-  AnalyticsOverview,
-  Usage,
   Tenant,
-  QueueSlot,
-  QueueSchedule,
+  TenantAccount,
+  ClientToken,
   Webhook,
   WebhookEvent,
   WebhookEventType,
-  Comment,
-  CommentStats,
-  Conversation,
-  InboxMessage,
-  InboxStats,
-  Mention,
-  MentionStats,
+  Usage,
   PaginatedResponse,
   SchedulifyXConfig
 } from 'schedulifyx-sdk';
 ```
+
+## Migration from v1.x
+
+v2.0 introduced the three-tier access model. Direct data API methods were removed from the default (Tier 1) SDK, but are now available again with higher-tier API keys:
+
+| Method | Tier 1 (Embed) | Tier 2 (Publishing) | Tier 3 (Engagement) |
+|---|---|---|---|
+| `client.posts.*` | Use embedded component | ✅ REST API | ✅ REST API |
+| `client.accounts.*` | Use embedded component | ✅ REST API | ✅ REST API |
+| `client.analytics.*` | Use embedded component | ✅ REST API | ✅ REST API |
+| `client.queue.*` | Use embedded component | ✅ REST API | ✅ REST API |
+| `client.xTwitter.*` | Use embedded component | ✅ REST API | ✅ REST API |
+| `client.profiles.*` | Use embedded component | ✅ REST API | ✅ REST API |
+| `client.comments.*` | Use embedded component | — | ✅ REST API |
+| `client.inbox.*` | Use embedded component | — | ✅ REST API |
+| `client.mentions.*` | Use embedded component | — | ✅ REST API |
+
+**New in v2.0:**
+- `client.tenants.generateClientToken()` — Generate tokens for embed SDK
+- Persistent account connections via OAuth (accounts survive token expiry)
+- Request Tier 2/3 access from your [API Keys dashboard](https://app.schedulifyx.com/settings/api)
+
+See the [Embed Components documentation](https://app.schedulifyx.com/docs/embed-components) for frontend integration or the [Publishing API docs](https://app.schedulifyx.com/docs/api-posts) for REST access.
 
 ## License
 
