@@ -21,6 +21,7 @@ export interface SchedulifyXConfig {
   apiKey: string;
   baseUrl?: string;
   timeout?: number;
+  tenantId?: string;
 }
 
 export interface Tenant {
@@ -140,6 +141,7 @@ export interface PostPlatform {
   accountId?: string;
   status?: string;
   platformPostId?: string;
+  platformPostUrl?: string;
   error?: string;
   platformSettings?: Record<string, unknown>;
 }
@@ -191,6 +193,8 @@ export interface AnalyticsOverview {
   publishedPosts: number;
   scheduledPosts: number;
   connectedAccounts: number;
+  totalFollowers?: number;
+  accounts?: { id: string; platform: string; name: string; followers: number }[];
 }
 
 export interface AccountAnalyticsEntry {
@@ -308,22 +312,15 @@ export interface CommentStats {
 
 export interface Conversation {
   id: string;
-  brandId: string;
-  accountId: string;
-  accountName?: string;
   platform: string;
-  platformConversationId: string;
-  participantId?: string;
   participantName?: string;
   participantUsername?: string;
   participantProfilePicture?: string;
-  lastMessageContent?: string;
-  lastMessageAt: string;
-  unreadCount: number;
+  socialAccountId: string;
   status: string;
-  labels: string[];
+  unreadCount: number;
+  lastMessageAt: string;
   createdAt: string;
-  updatedAt: string;
 }
 
 export interface Message {
@@ -350,7 +347,7 @@ export interface Mention {
   mentionType: string;
   authorUsername: string;
   authorName: string;
-  authorProfileUrl: string;
+  authorProfilePicture: string;
   content: string;
   mediaUrl: string | null;
   mediaType: string | null;
@@ -391,6 +388,7 @@ export class SchedulifyX {
   private apiKey: string;
   private baseUrl: string;
   private timeout: number;
+  private _tenantId?: string;
 
   constructor(config: SchedulifyXConfig | string) {
     if (typeof config === 'string') {
@@ -401,7 +399,18 @@ export class SchedulifyX {
       this.apiKey = config.apiKey;
       this.baseUrl = config.baseUrl || 'https://api.schedulifyx.com';
       this.timeout = config.timeout || 30000;
+      this._tenantId = config.tenantId;
     }
+  }
+
+  /** Set the tenant context for Tier 2+ API calls. Required for posts, accounts, analytics, etc. */
+  setTenantId(tenantId: string): void {
+    this._tenantId = tenantId;
+  }
+
+  /** Get the current tenant ID */
+  getTenantId(): string | undefined {
+    return this._tenantId;
   }
 
   private async request<T>(
@@ -429,6 +438,7 @@ export class SchedulifyX {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
+          ...(this._tenantId ? { 'X-Tenant-Id': this._tenantId } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
@@ -530,6 +540,11 @@ export class SchedulifyX {
     generateClientToken: async (tenantId: string, options?: { components?: string[]; expiresIn?: number; allowedOrigins?: string[] }): Promise<{ data: ClientToken }> => {
       return this.request('POST', `/tenants/${tenantId}/client-token`, options);
     },
+
+    /** Trigger engagement data sync for a tenant. Requires scope: tenants:write */
+    sync: async (tenantId: string): Promise<{ data: Record<string, unknown> }> => {
+      return this.request('POST', `/tenants/${tenantId}/sync`);
+    },
   };
 
   // ==================== TIER 1: WEBHOOKS ====================
@@ -592,7 +607,7 @@ export class SchedulifyX {
 
   posts = {
     /** List posts. Requires scope: posts:read */
-    list: async (params?: { status?: string; platform?: string; limit?: number; offset?: number; tenantUserId?: string }): Promise<PaginatedResponse<Post>> => {
+    list: async (params?: { status?: string; platform?: string; limit?: number; offset?: number }): Promise<PaginatedResponse<Post>> => {
       return this.request('GET', '/posts', undefined, params);
     },
 
@@ -619,7 +634,6 @@ export class SchedulifyX {
       platforms: { accountId: string; platform: string; platformSettings?: Record<string, unknown> }[];
       scheduledFor?: string;
       mediaUrls?: string[];
-      tenantUserId?: string;
       mode?: 'publish' | 'schedule' | 'draft';
     }): Promise<{ data: Post }> => {
       return this.request('POST', '/posts', data);
@@ -645,7 +659,7 @@ export class SchedulifyX {
 
   accounts = {
     /** List connected social accounts. Requires scope: accounts:read */
-    list: async (params?: { platform?: string; active?: boolean; tenantUserId?: string; limit?: number; offset?: number }): Promise<PaginatedResponse<Account>> => {
+    list: async (params?: { platform?: string; active?: boolean; limit?: number; offset?: number }): Promise<PaginatedResponse<Account>> => {
       return this.request('GET', '/accounts', undefined, params as Record<string, string | number | boolean | undefined>);
     },
 
@@ -657,6 +671,11 @@ export class SchedulifyX {
     /** Get Pinterest boards for an account. Requires scope: accounts:read */
     getPinterestBoards: async (accountId: string): Promise<{ data: { boards: { id: string; name: string; description: string; privacy: string; pinCount: number }[] } }> => {
       return this.request('GET', `/accounts/${accountId}/pinterest-boards`);
+    },
+
+    /** Get TikTok creator info for an account. Requires scope: accounts:read */
+    getTiktokCreatorInfo: async (accountId: string): Promise<{ data: Record<string, unknown> }> => {
+      return this.request('GET', `/accounts/${accountId}/tiktok-creator-info`);
     },
   };
 
@@ -676,6 +695,11 @@ export class SchedulifyX {
     /** Get detailed analytics. Requires scope: analytics:read */
     detailed: async (params?: { accountId?: string; startDate?: string; endDate?: string }): Promise<{ data: DetailedAnalytics }> => {
       return this.request('GET', '/analytics', undefined, params);
+    },
+
+    /** Get post-level analytics. Requires scope: analytics:read */
+    posts: async (params?: { limit?: number; offset?: number; platform?: string; sortBy?: 'published_at' | 'engagement' }): Promise<PaginatedResponse<Record<string, unknown>>> => {
+      return this.request('GET', '/analytics/posts', undefined, params);
     },
   };
 
@@ -807,6 +831,11 @@ export class SchedulifyX {
     stats: async (): Promise<{ data: CommentStats }> => {
       return this.request('GET', '/comments/stats/overview');
     },
+
+    /** Sync comments from social platforms. Requires scope: comments:write */
+    sync: async (accountId?: string): Promise<{ data: Record<string, unknown> }> => {
+      return this.request('POST', '/comments/sync', accountId ? { accountId } : undefined);
+    },
   };
 
   // ==================== TIER 3: INBOX ====================
@@ -836,6 +865,11 @@ export class SchedulifyX {
     stats: async (): Promise<{ data: InboxStats }> => {
       return this.request('GET', '/inbox/stats');
     },
+
+    /** Sync inbox messages from social platforms. Requires scope: inbox:write */
+    sync: async (accountId?: string): Promise<{ data: Record<string, unknown> }> => {
+      return this.request('POST', '/inbox/sync', accountId ? { accountId } : undefined);
+    },
   };
 
   // ==================== TIER 3: MENTIONS ====================
@@ -849,6 +883,11 @@ export class SchedulifyX {
     /** Get mention statistics. Requires scope: mentions:read */
     stats: async (): Promise<{ data: MentionStats }> => {
       return this.request('GET', '/mentions/stats');
+    },
+
+    /** Sync mentions from social platforms. Requires scope: mentions:read */
+    sync: async (accountId?: string): Promise<{ data: Record<string, unknown> }> => {
+      return this.request('POST', '/mentions/sync', accountId ? { accountId } : undefined);
     },
   };
 }
