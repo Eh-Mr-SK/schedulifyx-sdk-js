@@ -17,11 +17,28 @@
 
 // ==================== TYPES ====================
 
+export interface RetryConfig {
+  /** Max number of retry attempts (default: 3) */
+  maxRetries?: number;
+  /** Initial delay in ms before first retry (default: 500) */
+  initialDelay?: number;
+  /** Maximum delay in ms between retries (default: 10000) */
+  maxDelay?: number;
+  /** Multiplier for exponential backoff (default: 2) */
+  backoffMultiplier?: number;
+  /** HTTP status codes that trigger a retry (default: [429, 500, 502, 503, 504]) */
+  retryableStatuses?: number[];
+  /** Whether to retry on network/timeout errors (default: true) */
+  retryOnNetworkError?: boolean;
+}
+
 export interface SchedulifyXConfig {
   apiKey: string;
   baseUrl?: string;
   timeout?: number;
   tenantId?: string;
+  /** Retry configuration. Set to false to disable retries entirely. */
+  retry?: RetryConfig | false;
 }
 
 export interface Tenant {
@@ -384,22 +401,38 @@ export class SchedulifyXError extends Error {
 
 // ==================== MAIN SDK CLASS ====================
 
+const DEFAULT_RETRY_CONFIG: Required<RetryConfig> = {
+  maxRetries: 3,
+  initialDelay: 500,
+  maxDelay: 10000,
+  backoffMultiplier: 2,
+  retryableStatuses: [429, 500, 502, 503, 504],
+  retryOnNetworkError: true,
+};
+
 export class SchedulifyX {
   private apiKey: string;
   private baseUrl: string;
   private timeout: number;
   private _tenantId?: string;
+  private retryConfig: Required<RetryConfig> | null;
 
   constructor(config: SchedulifyXConfig | string) {
     if (typeof config === 'string') {
       this.apiKey = config;
       this.baseUrl = 'https://api.schedulifyx.com';
       this.timeout = 30000;
+      this.retryConfig = { ...DEFAULT_RETRY_CONFIG };
     } else {
       this.apiKey = config.apiKey;
       this.baseUrl = config.baseUrl || 'https://api.schedulifyx.com';
       this.timeout = config.timeout || 30000;
       this._tenantId = config.tenantId;
+      if (config.retry === false) {
+        this.retryConfig = null;
+      } else {
+        this.retryConfig = { ...DEFAULT_RETRY_CONFIG, ...config.retry };
+      }
     }
   }
 
@@ -413,22 +446,33 @@ export class SchedulifyX {
     return this._tenantId;
   }
 
-  private async request<T>(
-    method: string,
-    endpoint: string,
-    body?: unknown,
-    queryParams?: Record<string, string | number | boolean | undefined>
-  ): Promise<T> {
-    const url = new URL(`${this.baseUrl}${endpoint}`);
+  private async sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 
-    if (queryParams) {
-      Object.entries(queryParams).forEach(([key, value]) => {
-        if (value !== undefined) {
-          url.searchParams.set(key, String(value));
-        }
-      });
+  private getRetryDelay(attempt: number): number {
+    if (!this.retryConfig) return 0;
+    const delay = this.retryConfig.initialDelay * Math.pow(this.retryConfig.backoffMultiplier, attempt);
+    // Add jitter (±25%) to prevent thundering herd
+    const jitter = delay * 0.25 * (Math.random() * 2 - 1);
+    return Math.min(delay + jitter, this.retryConfig.maxDelay);
+  }
+
+  private isRetryable(error: SchedulifyXError): boolean {
+    if (!this.retryConfig) return false;
+    // Retry on network errors and timeouts
+    if ((error.code === 'network_error' || error.code === 'timeout') && this.retryConfig.retryOnNetworkError) {
+      return true;
     }
+    // Retry on specific HTTP status codes
+    return this.retryConfig.retryableStatuses.includes(error.status);
+  }
 
+  private async requestOnce<T>(
+    method: string,
+    url: URL,
+    body?: unknown
+  ): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
@@ -469,6 +513,51 @@ export class SchedulifyX {
         0
       );
     }
+  }
+
+  private async request<T>(
+    method: string,
+    endpoint: string,
+    body?: unknown,
+    queryParams?: Record<string, string | number | boolean | undefined>
+  ): Promise<T> {
+    const url = new URL(`${this.baseUrl}${endpoint}`);
+
+    if (queryParams) {
+      Object.entries(queryParams).forEach(([key, value]) => {
+        if (value !== undefined) {
+          url.searchParams.set(key, String(value));
+        }
+      });
+    }
+
+    const maxAttempts = (this.retryConfig?.maxRetries ?? 0) + 1;
+    let lastError: SchedulifyXError | undefined;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        return await this.requestOnce<T>(method, url, body);
+      } catch (error) {
+        lastError = error instanceof SchedulifyXError
+          ? error
+          : new SchedulifyXError(
+            error instanceof Error ? error.message : 'Unknown error',
+            'unknown_error',
+            0
+          );
+
+        const isLastAttempt = attempt >= maxAttempts - 1;
+        if (isLastAttempt || !this.isRetryable(lastError)) {
+          throw lastError;
+        }
+
+        // Wait with exponential backoff before retrying
+        const delay = this.getRetryDelay(attempt);
+        await this.sleep(delay);
+      }
+    }
+
+    throw lastError!;
   }
 
   // ==================== TIER 1: TENANTS ====================
