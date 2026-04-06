@@ -1,6 +1,6 @@
 {
   "name": "schedulifyx-sdk",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Official JavaScript/TypeScript SDK for SchedulifyX API - Three-tier architecture: Embed, Publishing, and Full Engagement",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
